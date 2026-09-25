@@ -1,0 +1,68 @@
+/* Baralho "Games e tecnologia". Jogos online, montagem de PC, streams, torneios e história mundial.
+   Cada chunk: [id, categoria, português, inglês, frase de exemplo].
+   O id NUNCA deve mudar nem ser reaproveitado: é nele que o progresso de cada pessoa fica gravado.
+   Pode acrescentar, reordenar ou corrigir texto à vontade sem perder histórico. */
+window.CS_DECKS = window.CS_DECKS || {};
+CS_DECKS.games = {
+  name: 'Games e tecnologia',
+  cats: [
+  {key:'queue', label:'Entrando no Jogo'},
+  {key:'partida', label:'Durante a Partida'},
+  {key:'pc', label:'Montando o PC'},
+  {key:'streams', label:'Assistindo Streams'},
+  {key:'despedida', label:'Encontro e Despedida'},
+  {key:'times', label:'Torneios e Times'},
+  {key:'software', label:'Configurações e Software'},
+  {key:'historia', label:'História Mundial'}
+  ],
+  chunks: [
+  ['s1','queue','Bora jogar uma partida?','Wanna queue up?','Hey, wanna queue up for a match?'],
+  ['s2','queue','To adicionando você','I’m adding you as a friend','I’m adding you as a friend on Steam.'],
+  ['s3','queue','Qual sua patente?','What’s your rank?','What’s your rank this season?'],
+  ['s4','queue','To entrando na call','I’m joining the call','Give me a sec, I’m joining the call.'],
+  ['s5','queue','Vamos de duo?','Wanna run it as a duo?','Wanna run it as a duo tonight?'],
+  ['s6','queue','To pronto, pode começar','I’m ready, go ahead and start','I’m ready, go ahead and start the match.'],
+  ['s7','partida','Cuidado, atrás de você!','Watch out, behind you!','Watch out, there’s someone behind you!'],
+  ['s8','partida','Me dá cobertura','Cover me','Cover me while I reload.'],
+  ['s9','partida','To sem munição','I’m out of ammo','I’m out of ammo, need a refill.'],
+  ['s10','partida','Vamos pelo mapa','Let’s rotate','Let’s rotate to the other side of the map.'],
+  ['s11','partida','Bom tiro!','Nice shot!','Nice shot, that was clean!'],
+  ['s12','partida','Meu ping tá alto','My ping is really high','My ping is really high right now, sorry.'],
+  ['s19','pc','To montando um PC novo','I’m building a new PC','I’m building a new gaming PC this month.'],
+  ['s20','pc','Qual placa de vídeo você usa?','What GPU are you running?','What GPU are you running these days?'],
+  ['s21','pc','Preciso de mais memória RAM','I need more RAM','I need more RAM to run this smoothly.'],
+  ['s22','pc','A fonte é compatível?','Is the power supply compatible?','Is the power supply compatible with this GPU?'],
+  ['s23','pc','Vou fazer o upgrade do processador','I’m going to upgrade the CPU','I’m going to upgrade the CPU next.'],
+  ['s24','pc','O PC tá superaquecendo','The PC is overheating','The PC is overheating under load.'],
+  ['s31','streams','Quem tá na live?','Who’s live right now?','Who’s live right now on Twitch?'],
+  ['s32','streams','Isso foi incrível!','That was insane!','That play was insane!'],
+  ['s33','streams','Se inscreve no canal','Subscribe to the channel','Don’t forget to subscribe to the channel.'],
+  ['s34','streams','Deixa o like','Leave a like','Leave a like if you enjoyed it.'],
+  ['s35','streams','To assistindo a partida','I’m watching the match','I’m watching the match right now.'],
+  ['s36','streams','Qual jogo você recomenda?','What game do you recommend?','What game do you recommend I try?'],
+  ['s37','despedida','Boa partida!','Good game!','Good game, well played!'],
+  ['s38','despedida','Valeu pela ajuda','Thanks for the help','Thanks for the help back there.'],
+  ['s39','despedida','A gente se vê depois','See you later','Alright, see you later.'],
+  ['s40','despedida','Foi mal por isso','My bad','My bad, that was my fault.'],
+  ['s41','despedida','Vamos de novo?','One more round?','One more round before we log off?'],
+  ['s42','despedida','Até a próxima!','Catch you next time!','Catch you next time, gg!'],
+  ['s43','times','Vamos formar um time?','Wanna form a team?','Wanna form a team for the tournament?'],
+  ['s44','times','Qual sua função no time?','What’s your role on the team?','What’s your role on the team, support or carry?'],
+  ['s45','times','A gente se classificou!','We qualified!','We qualified for the next round!'],
+  ['s46','times','Vamos treinar antes do campeonato','Let’s practice before the tournament','Let’s practice before the tournament starts.'],
+  ['s47','times','Quem vai ser o capitão?','Who’s going to be the captain?','Who’s going to be the captain of the team?'],
+  ['s48','times','A gente perdeu por pouco','We lost by a close margin','We lost by a close margin, so close!'],
+  ['s49','software','Preciso atualizar os drivers','I need to update the drivers','I need to update the graphics drivers.'],
+  ['s50','software','O jogo tá travando','The game keeps freezing','The game keeps freezing on this level.'],
+  ['s51','software','Qual configuração você usa?','What settings do you use?','What settings do you use for sensitivity?'],
+  ['s52','software','Vou reinstalar o jogo','I’m going to reinstall the game','I’m going to reinstall the game to fix it.'],
+  ['s53','software','Isso resolveu o problema','That fixed the issue','That fixed the issue, thanks!'],
+  ['s54','software','Deixa eu verificar minhas configurações','Let me check my settings','Let me check my settings real quick.'],
+  ['s55','historia','Isso aconteceu durante a Segunda Guerra Mundial','This happened during World War II','This happened during World War II, back in the 1940s.'],
+  ['s56','historia','Foi um marco na história','It was a turning point in history','The fall of the Berlin Wall was a turning point in history.'],
+  ['s57','historia','Essa civilização existiu há milhares de anos','This civilization existed thousands of years ago','This civilization existed thousands of years ago, in ancient Egypt.'],
+  ['s58','historia','Quem descobriu isso primeiro?','Who discovered this first?','Who discovered this first, historically speaking?'],
+  ['s59','historia','Isso mudou o curso da história','It changed the course of history','That invention changed the course of history.'],
+  ['s60','historia','Vamos voltar no tempo','Let’s go back in time','Let’s go back in time and look at how it all started.']
+  ]
+};
