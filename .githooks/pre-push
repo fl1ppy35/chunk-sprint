@@ -1,0 +1,38 @@
+#!/bin/sh
+# Conferência antes de qualquer envio para o GitHub.
+# Só deixa o push seguir se o destino for o repositório escrito em .repo-esperado
+# e se o que sobe for a branch main. Roda também pelo GitHub Desktop.
+
+destino_url="$2"
+raiz="$(git rev-parse --show-toplevel)"
+arquivo="$raiz/.repo-esperado"
+
+if [ ! -f "$arquivo" ]; then
+  echo "BLOQUEADO: falta o arquivo .repo-esperado em $raiz." >&2
+  exit 1
+fi
+esperado="$(head -n 1 "$arquivo" | tr -d '[:space:]')"
+
+# normaliza https://github.com/dono/repo(.git) e git@github.com:dono/repo(.git) para dono/repo
+destino="$(printf '%s' "$destino_url" | sed -E 's#^(https://([^@/]+@)?github\.com/|git@github\.com:|ssh://git@github\.com/)##; s#\.git$##; s#/$##')"
+
+if [ "$destino" != "$esperado" ]; then
+  echo "" >&2
+  echo "BLOQUEADO: este projeto só pode ser enviado para $esperado." >&2
+  echo "  Pasta:   $raiz" >&2
+  echo "  Destino: $destino_url" >&2
+  echo "Nada foi enviado. Confira se está no projeto certo." >&2
+  exit 1
+fi
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ -z "$remote_ref" ] && continue
+  if [ "$remote_ref" != "refs/heads/main" ]; then
+    echo "" >&2
+    echo "BLOQUEADO: só a branch main sobe para $esperado (tentou: $remote_ref)." >&2
+    echo "Nada foi enviado." >&2
+    exit 1
+  fi
+done
+
+exit 0
