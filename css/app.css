@@ -249,3 +249,6 @@
   .goal:first-of-type{ border-top:none; }
   .goal-head{ display:flex; justify-content:space-between; gap:10px; font-size:.9rem; }
   .goal.done .goal-head b{ color:var(--good); }
+  .vars{ display:flex; flex-direction:column; gap:6px; width:100%; max-width:460px; text-align:left; }
+  .var-line{ display:flex; flex-direction:column; gap:2px; text-align:left; background:var(--surface-2); border:1px solid var(--border); color:var(--ink); border-radius:var(--radius-sm); padding:8px 12px; font-size:.9rem; }
+  .var-line .pt{ font-size:.8rem; color:var(--ink-muted); }

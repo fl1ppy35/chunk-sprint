@@ -3,7 +3,7 @@
    2. FALAR (role-play): a pessoa faz o papel "voce" e responde em voz alta ou digitando.
    Cada conversa só é liberada quando todos os chunks de "usa" já foram aprendidos.
    Falas: ['outro' | 'voce', 'inglês', 'português']. */
-window.CS_DIALOGS = {
+window.CS_DIALOGS = Object.assign(window.CS_DIALOGS || {}, {
   /* ---- viagem e dia a dia ---- */
   diaadia: { titulo:'Conhecendo alguém no hotel', usa:['t1','t2','t3','t5','t6'], falas:[
     ['outro','Hi there! How are you doing?','Oi! Tudo bem?'],
@@ -19,7 +19,7 @@ window.CS_DIALOGS = {
     ['outro','That jacket is forty-five dollars.','Essa jaqueta custa quarenta e cinco dólares.'],
     ['voce','Do you have another color or size?','Tem outra cor ou tamanho?'],
     ['outro','We have it in black, in a medium.','Temos em preto, no tamanho M.'],
-    ['voce','Great, I’ll take it. Do you accept card?','Ótimo, vou levar. Vocês aceitam cartão?'],
+    ['voce','Great, I’ll take it. Do you take cards?','Ótimo, vou levar. Vocês aceitam cartão?'],
     ['outro','Sure, just tap it right here.','Claro, é só aproximar aqui.'],
     ['voce','Can I get a receipt, please?','Pode me dar o recibo, por favor?']
   ]},
@@ -75,7 +75,7 @@ window.CS_DIALOGS = {
     ['voce','Hi, I’m writing about order 2231. When can we expect the shipment?','Oi, estou escrevendo sobre o pedido 2231. Quando podemos esperar o envio?'],
     ['outro','Good news: the order has been shipped from Germany.','Boa notícia: o pedido já foi enviado da Alemanha.'],
     ['voce','Great. And how long will it take?','Ótimo. E quanto tempo vai levar?'],
-    ['outro','The delivery time is about two weeks.','O prazo de entrega é de umas duas semanas.'],
+    ['outro','The delivery time is two weeks, more or less.','O prazo de entrega é de duas semanas, mais ou menos.'],
     ['voce','Perfect. I’ll check the status of the order next week.','Perfeito. Vou verificar o status do pedido semana que vem.']
   ]},
   email: { titulo:'Cobrando uma resposta', usa:['f25','f26','f27','f28','f29','f30'], falas:[
@@ -109,7 +109,7 @@ window.CS_DIALOGS = {
     ['outro','This morning. Is it still covered?','Hoje de manhã. Ainda está coberto?'],
     ['voce','Yes, the equipment is under warranty. I’ll forward this to our technical team.','Sim, o equipamento está na garantia. Vou encaminhar para o time técnico.'],
     ['outro','Can someone come here in person?','Alguém pode vir aqui pessoalmente?'],
-    ['voce','Sure. Let’s schedule a technical visit for tomorrow.','Claro. Vamos agendar uma visita técnica para amanhã.']
+    ['voce','Sure. Let’s schedule a service visit for tomorrow.','Claro. Vamos agendar uma visita técnica para amanhã.']
   ]},
   feiras: { titulo:'Combinando encontro na feira', usa:['f49','f50','f51','f52'], falas:[
     ['outro','Felipe! Are you coming to Medica in Düsseldorf this year?','Felipe! Você vem para a Medica em Düsseldorf este ano?'],
@@ -125,7 +125,7 @@ window.CS_DIALOGS = {
     ['voce','Hey, wanna queue up?','E aí, bora jogar uma partida?'],
     ['outro','Sure! What’s your rank?','Bora! Qual sua patente?'],
     ['voce','Gold. I’m adding you as a friend.','Ouro. To adicionando você.'],
-    ['outro','Got it. Wanna run it as a duo?','Recebi. Vamos de duo?'],
+    ['outro','Got it. Wanna duo?','Recebi. Vamos de duo?'],
     ['voce','Yeah. Give me a sec, I’m joining the call.','Vamos. Pera aí, to entrando na call.'],
     ['outro','Cool, I’m in the lobby.','Beleza, to no lobby.'],
     ['voce','I’m ready, go ahead and start.','To pronto, pode começar.']
@@ -171,13 +171,13 @@ window.CS_DIALOGS = {
     ['outro','You can be the captain. What’s your role on the team?','Pode ser você. Qual sua função no time?'],
     ['voce','Carry. Let’s practice before the tournament.','Carry. Vamos treinar antes do campeonato.'],
     ['outro','Two weeks later… We qualified!','Duas semanas depois… A gente se classificou!'],
-    ['voce','Awesome! Last year we lost by a close margin.','Demais! Ano passado a gente perdeu por pouco.']
+    ['voce','Awesome! Last year we barely lost.','Demais! Ano passado a gente perdeu por pouco.']
   ]},
   software: { titulo:'O jogo travando', usa:['s49','s50','s51','s52','s53','s54'], falas:[
     ['voce','The game keeps freezing on this level.','O jogo tá travando nessa fase.'],
     ['outro','Did you update your graphics drivers?','Você atualizou os drivers de vídeo?'],
     ['voce','Not yet. I need to update the drivers.','Ainda não. Preciso atualizar os drivers.'],
-    ['outro','Also, what settings are you on?','E em qual configuração você tá?'],
+    ['outro','Also, what settings do you use?','E qual configuração você usa?'],
     ['voce','Let me check my settings real quick. Ultra, everything maxed out.','Deixa eu verificar minhas configurações. Ultra, tudo no máximo.'],
     ['outro','Try medium. If it still freezes, reinstall it.','Testa no médio. Se continuar travando, reinstala.'],
     ['voce','OK, if not, I’m going to reinstall the game.','Beleza, se não der, vou reinstalar o jogo.'],
@@ -192,4 +192,4 @@ window.CS_DIALOGS = {
     ['outro','Next, let’s watch one about the Roman Empire.','Depois, bora ver um sobre o Império Romano.'],
     ['voce','Good idea. Let’s go back in time again!','Boa ideia. Vamos voltar no tempo de novo!']
   ]}
-};
+});

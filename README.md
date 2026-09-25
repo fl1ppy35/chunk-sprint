@@ -14,7 +14,7 @@ Página estática (HTML, CSS e JavaScript puro, sem build e sem dependências). 
 
 1. **Aquecimento**: revisão dos chunks que venceram hoje. Fale antes de virar a carta; dá para gravar, e o app sugere Errei, Difícil ou Fácil.
 2. **Chunks novos**: 4, 6 ou 9 por dia. Cada um é apresentado com áudio e exemplo, e depois a pessoa tem que **produzir** o chunk (falar ou digitar a partir do português, com dica de iniciais opcional).
-3. **Prática ativa**: digitar, montar a frase, completar lacuna, múltipla escolha, ditado e **chunk na frase** (encaixar o chunk no exemplo). Fica mais difícil conforme o chunk sobe de caixa.
+3. **Prática ativa**: digitar, montar a frase, completar lacuna, múltipla escolha, ditado, **chunk na frase** (encaixar o chunk no exemplo) e **outra situação** (substituição: produzir a frase inteira com o chunk num contexto novo). Fica mais difícil conforme o chunk sobe de caixa.
 4. **Shadowing**: ouvir, falar junto e gravar. A porcentagem mede clareza, não sotaque.
 5. **Conversa**: um diálogo curto por categoria, liberado quando os chunks dele já foram aprendidos. Primeiro ouvir sem ler; depois fazer o seu papel, falando. Também fica na aba Baralho.
 
@@ -35,7 +35,12 @@ Leitner com 6 caixas e intervalos de `[1, 2, 4, 7, 14, 30]` dias. Fácil sobe um
 | `js/decks/viagem.js` | Módulo comum de viagem e dia a dia (24 chunks) |
 | `js/decks/negocios.js` | Negócios, Astton Medical (54 chunks) |
 | `js/decks/games.js` | Games, tecnologia e história (48 chunks) |
-| `js/dialogos.js` | 21 conversas, uma por categoria (falas `outro` / `voce`) |
+| `js/decks/negocios2.js` | Negócios, pacote 2: produto, pagamento, alfândega, contratos, calibração, normas… (60) |
+| `js/decks/games2.js` | Games, pacote 2: estratégia, loja, criar conteúdo, programação, escola, ciência… (60) |
+| `js/decks/cultura.js` | Dayane: filmes, séries, cinema, música, livros, museus, teatro, opinião (60) |
+| `js/dialogos.js` | 21 conversas do pacote 1 (as dos pacotes novos ficam no próprio arquivo do baralho) |
+| `docs/guia-de-conteudo.md` | Regras para escrever chunks, variações e conversas |
+| `tools/validar-conteudo.js` | Verificador: `node tools/validar-conteudo.js` precisa dar OK antes de publicar |
 | `js/migracao.js` | Progresso trazido do claude.ai (entra uma vez só) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Instalar como app e abrir sem internet |
 
@@ -101,10 +106,14 @@ Depois abrir `http://localhost:8765`. Abrir o `index.html` direto pelo Finder ta
    - metas por nível A1 a B1;
    - aviso de que o microfone mede clareza, não sotaque.
 
+8. **25/09/2026, terceira leva (conteúdo)**:
+   - +60 chunks para cada perfil (Felipe 138, Arthur 132, Dayane 84), em ordem de nível A1 → B1;
+   - baralho da Dayane: filmes, séries e cultura;
+   - 30 conversas novas (51 no total);
+   - 2 variações por chunk (612 frases) e exercício de substituição;
+   - 5 frases pouco naturais trocadas (ids mantidos) e 15 exemplos ajustados;
+   - guia de conteúdo e verificador automático.
+
 ## Próximas levas
 
-- **Conteúdo**:
-  - vários exemplos e exercício de substituição por chunk;
-  - baralhos maiores (hoje dão cerca de 2 semanas no ritmo padrão);
-  - interesses da Dayane;
-  - revisão das frases que soam pouco naturais.
+- Novo pacote quando o painel avisar que um baralho está quase dominado (seguir `docs/guia-de-conteudo.md`).

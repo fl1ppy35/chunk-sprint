@@ -4,7 +4,7 @@
 /* ---------- PERFIS E BARALHOS ----------
    O conteúdo mora em js/decks/*.js e a lista de pessoas em js/profiles.js.
    Aqui só juntamos as duas coisas. */
-function C(arr){ return {id:arr[0], cat:arr[1], pt:arr[2], en:arr[3], ex:arr[4]}; }
+function C(arr){ return {id:arr[0], cat:arr[1], pt:arr[2], en:arr[3], ex:arr[4], vars:(arr[5]||[]).map(function(v){ return {en:v[0], pt:v[1]}; })}; }
 var PROFILE_KEYS = [];
 var PROFILES = {};
 window.CS_PROFILES.forEach(function(p){
@@ -582,6 +582,8 @@ function pickExerciseType(chunk){
   else if(box<=3) pool=['scramble','cloze','type','dictation','context'];
   else pool=['type','dictation','context','type'];
   if(!contextBlank(chunk)) pool = pool.filter(function(t){ return t!=='context'; });
+  /* substituição: a partir da caixa 1, o mesmo chunk numa situação nova */
+  if(box>=1 && chunk.vars && chunk.vars.length) pool.push('variation');
   if(words<4) pool = pool.filter(function(t){ return t!=='scramble'; });
   if(!HAS_TTS) pool = pool.filter(function(t){ return t!=='dictation'; });
   if(!pool.length) pool=['type'];
@@ -602,6 +604,7 @@ function buildExercise(chunk){
     ex.picked = [];
   }
   if(type==='context'){ ex.ctx = contextBlank(chunk); }
+  if(type==='variation'){ ex.variant = pick(chunk.vars); }
   if(type==='cloze'){
     var cw = clozeWord(chunk.en);
     if(!cw){ ex.type='type'; } else { ex.cloze = cw; }
@@ -625,6 +628,13 @@ function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').rep
 var BOX_COLORS = ['var(--ramp1)','var(--ramp2)','var(--ramp3)','var(--ramp4)','var(--ramp5)','var(--good)'];
 var BOX_LABELS = ['Aprendendo','Caixa 1','Caixa 2','Caixa 3','Caixa 4','Dominado'];
 function boxColor(box){ return BOX_COLORS[box] || BOX_COLORS[0]; }
+/* "vários exemplos": as variações aparecem junto do exemplo, com áudio */
+function variantsHtml(chunk){
+  if(!chunk.vars || !chunk.vars.length) return '';
+  return '<div class="vars"><div class="kicker" style="font-size:.7rem;">Em outras situações</div>'+chunk.vars.map(function(v){
+    return '<button class="var-line" data-say="'+esc(v.en)+'" data-slow=""><span>🔊 '+esc(v.en)+'</span><span class="pt">'+esc(v.pt)+'</span></button>';
+  }).join('')+'</div>';
+}
 function soundRow(chunk, opts){
   opts = opts || {};
   var h = '<div class="sound-row">';
@@ -887,6 +897,7 @@ function viewSession(){
     if(session.newPhase==='show'){
       html += '<div class="kicker">'+esc(chunk.pt)+'</div>';
       html += '<div class="back"><div class="en">'+esc(chunk.en)+'</div><div class="ex">“'+esc(chunk.ex)+'”</div>'+soundRow(chunk)+'</div>';
+      html += variantsHtml(chunk);
       html += '<p class="muted" style="margin:0; max-width:46ch;">Ouça, repita em voz alta 2 ou 3 vezes imitando a entonação. Depois você vai ter que dizer sozinho, sem ver.</p>';
       html += '<div class="cta-row" style="justify-content:center; margin-top:6px;">';
       html += '<button class="btn btn-primary" id="learnBtn">Entendi, me testa <span class="kbd">Enter</span></button>';
@@ -970,7 +981,7 @@ function viewSession(){
     var chunk = session.practiceQueue[session.practiceIndex];
     if(!session.ex || session.ex.chunkId!==chunk.id){ session.ex = buildExercise(chunk); if(session.ex.type==='dictation') autoSpeak(chunk.en); }
     var ex = session.ex;
-    var labels = {type:'Digite de memória', choice:'Múltipla escolha', scramble:'Monte a frase', dictation:'Ditado', cloze:'Complete a lacuna', context:'Chunk na frase'};
+    var labels = {type:'Digite de memória', choice:'Múltipla escolha', scramble:'Monte a frase', dictation:'Ditado', cloze:'Complete a lacuna', context:'Chunk na frase', variation:'Outra situação'};
     var html = stepper + sectionLabel('Prática ativa', (session.practiceIndex+1)+' de '+session.practiceQueue.length);
     html += '<div class="flashcard">';
     html += '<div class="ex-tag">'+labels[ex.type]+'</div>';
@@ -990,6 +1001,11 @@ function viewSession(){
       html += '<div class="muted">'+esc(chunk.pt)+'</div>';
       html += '<div class="cloze">'+toks.map(function(t,i){ return i===ex.cloze.i ? '<span class="blank">'+(ex.done?esc(t):'')+'</span>' : esc(t); }).join(' ')+'</div>';
       html += '<input class="practice-input'+(ex.done?(ex.result==='bad'?' bad':' ok'):'')+'" id="pInput" placeholder="a palavra que falta" autocomplete="off" autocapitalize="off" spellcheck="false" value="'+esc(ex.answer)+'" '+(ex.done?'disabled':'')+' style="max-width:240px;" />';
+    }
+    if(ex.type==='variation'){
+      html += '<div class="kicker">Use o chunk <b>'+esc(chunk.en)+'</b> nesta situação:</div>';
+      html += '<div class="front">'+esc(ex.variant.pt)+'</div>';
+      html += '<input class="practice-input'+(ex.done?(ex.result==='bad'?' bad':' ok'):'')+'" id="pInput" placeholder="a frase inteira em inglês…" autocomplete="off" autocapitalize="off" spellcheck="false" value="'+esc(ex.answer)+'" '+(ex.done?'disabled':'')+' style="max-width:460px;" />';
     }
     if(ex.type==='context'){
       html += '<div class="kicker">Complete a frase com o chunk: <b>'+esc(chunk.pt)+'</b></div>';
@@ -1024,7 +1040,7 @@ function viewSession(){
       } else if(ex.type==='choice'){
         html += '<div class="feedback '+ex.result+'">'+(ex.result==='ok'?'✅ Certo!':'❌ Era: <b>'+esc(chunk.en)+'</b>')+'</div>';
       } else {
-        html += feedbackHtml(ex.result, chunk, shown);
+        html += feedbackHtml(ex.result, ex.type==='variation' ? {en:ex.variant.en} : chunk, shown);
       }
       html += soundRow(chunk, {example:false});
       html += '<div class="cta-row" style="justify-content:center;"><button class="btn btn-primary" id="nextPractice">Próximo <span class="kbd">Enter</span></button></div>';
@@ -1038,14 +1054,17 @@ function viewSession(){
       ex.answer = answer; ex.result = result; ex.done = true;
       practiceResult(chunk, result!=='bad');
       render();
-      if(result!=='bad') speak(chunk.en);
+      if(result!=='bad') speak(ex.type==='variation' ? ex.variant.en : chunk.en);
     }
     if(!ex.done){
       var inp = document.getElementById('pInput');
       if(inp){ inp.focus(); inp.oninput = function(){ ex.answer = inp.value; }; }
       var checkBtn = document.getElementById('checkBtn');
       var doCheck = function(){
-        if(ex.type==='type' || ex.type==='dictation' || ex.type==='context'){
+        if(ex.type==='variation'){
+          var valv = inp.value.trim(); if(!valv) return;
+          finishEx(valv, grade(valv, ex.variant.en));
+        } else if(ex.type==='type' || ex.type==='dictation' || ex.type==='context'){
           var val = inp.value.trim(); if(!val) return;
           finishEx(val, grade(val, chunk.en));
         } else if(ex.type==='cloze'){
@@ -1313,6 +1332,7 @@ function openChunkModal(id){
     '<div class="en" style="color:var(--blue); font-family:Fraunces,serif; font-size:1.3rem; font-weight:700; margin-top:8px;">'+esc(chunk.en)+'</div>'+
     '<div class="ex muted" style="font-style:italic; margin-top:6px;">“'+esc(chunk.ex)+'”</div>'+
     '<div style="margin-top:14px;">'+soundRow(chunk)+'</div>'+
+    '<div style="margin-top:12px;">'+variantsHtml(chunk)+'</div>'+
     '<div class="cta-row" style="margin-top:14px;">'+
       (!card ? '<button class="btn btn-secondary" id="modalKnow">Já sei isso</button>' : '')+
       '<button class="btn btn-ghost" id="modalClose">Fechar</button>'+
@@ -1450,9 +1470,9 @@ function viewGuide(){
   html += '<li><b>Narrar o dia</b>: descrever em voz alta (ou mentalmente) tarefas simples usando os chunks já aprendidos, tipo enquanto dirige ou prepara um café. Transforma vocabulário passivo em ativo, que é o gargalo de quem está começando.</li>';
   html += '</ul>';
   html += '<h3>Três baralhos, um método</h3>';
-  html += '<p>Você, o Arthur e a Dayane usam exatamente a mesma mecânica, só trocando de perfil no topo da tela. O baralho do Felipe foca em vendas, cotações e logística internacional; o do Arthur combina games e montagem de PC com temas mais amplos, como história mundial; o da Dayane começa pelo módulo de viagem e vai crescer com os temas de interesse dela. Cada um aprendendo o inglês que vai realmente usar.</p>';
+  html += '<p>Você, o Arthur e a Dayane usam exatamente a mesma mecânica, só trocando de perfil no topo da tela. O baralho do Felipe foca em vendas, cotações e logística internacional; o do Arthur combina games e montagem de PC com temas mais amplos, como história mundial; o da Dayane segue do módulo de viagem para filmes, séries e cultura. Cada um aprendendo o inglês que vai realmente usar.</p>';
   html += '<h3>Módulo de viagem, nos três baralhos</h3>';
-  html += '<p>Como vocês pretendem fazer viagens internacionais, toda pessoa do Chunk Sprint começa pelo mesmo módulo comum de inglês de viagem e do dia a dia: conversas simples, compras e serviços, pedir informação na rua e passar pela imigração no aeroporto. É a base que qualquer um precisa antes de entrar em temas mais específicos. Só depois de firmar esse básico é que o baralho passa pro tema principal de cada um (vendas pro Felipe, games e história pro Arthur).</p>';
+  html += '<p>Como vocês pretendem fazer viagens internacionais, toda pessoa do Chunk Sprint começa pelo mesmo módulo comum de inglês de viagem e do dia a dia: conversas simples, compras e serviços, pedir informação na rua e passar pela imigração no aeroporto. É a base que qualquer um precisa antes de entrar em temas mais específicos. Só depois de firmar esse básico é que o baralho passa pro tema principal de cada um (vendas pro Felipe, games e história pro Arthur, filmes e séries pra Dayane).</p>';
   html += '<h3>Feito pra durar</h3>';
   html += '<p>A ideia é o Chunk Sprint virar hábito de longo prazo, não um curso com data para acabar. Quando um baralho estiver quase todo dominado, o painel do dia avisa, e um pacote novo de chunks entra numa atualização do app. Seu histórico e sua sequência continuam exatamente de onde pararam, porque o progresso fica separado do conteúdo. Enquanto isso, os chunks já dominados voltam a cada 30 dias só para não enferrujar.</p>';
   html += '</div>';
