@@ -13,11 +13,14 @@ Página estática (HTML, CSS e JavaScript puro, sem build e sem dependências). 
 ## Método
 
 1. **Aquecimento**: revisão dos chunks que venceram hoje. Fale antes de virar a carta; dá para gravar, e o app sugere Errei, Difícil ou Fácil.
-2. **Chunks novos**: 4, 6 ou 9 por dia, cada um com áudio, exemplo e checagem rápida.
-3. **Prática ativa**: digitar, montar a frase, completar lacuna, múltipla escolha e ditado. Fica mais difícil conforme o chunk sobe de caixa.
-4. **Shadowing**: ouvir, falar junto e gravar para comparar.
+2. **Chunks novos**: 4, 6 ou 9 por dia. Cada um é apresentado com áudio e exemplo, e depois a pessoa tem que **produzir** o chunk (falar ou digitar a partir do português, com dica de iniciais opcional).
+3. **Prática ativa**: digitar, montar a frase, completar lacuna, múltipla escolha, ditado e **chunk na frase** (encaixar o chunk no exemplo). Fica mais difícil conforme o chunk sobe de caixa.
+4. **Shadowing**: ouvir, falar junto e gravar. A porcentagem mede clareza, não sotaque.
+5. **Conversa**: um diálogo curto por categoria, liberado quando os chunks dele já foram aprendidos. Primeiro ouvir sem ler; depois fazer o seu papel, falando. Também fica na aba Baralho.
 
-Leitner com 6 caixas e intervalos de `[1, 2, 4, 7, 14, 30]` dias. Acertou sobe, errou volta para a caixa 0.
+Leitner com 6 caixas e intervalos de `[1, 2, 4, 7, 14, 30]` dias. Fácil sobe uma caixa; Difícil fica na caixa com metade do intervalo; Errei desce **duas** caixas (não zera) e volta amanhã.
+
+**Metas por nível**: cada categoria tem nível (A1, A2, B1) e uma meta do tipo "negociar preço". A meta se cumpre com 80% dos chunks firmes (caixa 2 ou mais). Painel na aba Progresso.
 
 **Semana**: segunda a sexta com sessão completa; **sábado só revisão** (há um botão para pedir chunks novos mesmo assim); **domingo livre, sem quebrar a sequência**.
 
@@ -32,12 +35,13 @@ Leitner com 6 caixas e intervalos de `[1, 2, 4, 7, 14, 30]` dias. Acertou sobe, 
 | `js/decks/viagem.js` | Módulo comum de viagem e dia a dia (24 chunks) |
 | `js/decks/negocios.js` | Negócios, Astton Medical (54 chunks) |
 | `js/decks/games.js` | Games, tecnologia e história (48 chunks) |
+| `js/dialogos.js` | 21 conversas, uma por categoria (falas `outro` / `voce`) |
 | `js/migracao.js` | Progresso trazido do claude.ai (entra uma vez só) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Instalar como app e abrir sem internet |
 
 ### Acrescentar conteúdo
 
-Em `js/decks/<baralho>.js`, cada chunk é `['id', 'categoria', 'português', 'inglês', 'frase de exemplo']`.
+Categorias: `{key, label, level, cando}`. Em `js/decks/<baralho>.js`, cada chunk é `['id', 'categoria', 'português', 'inglês', 'frase de exemplo']`.
 **O `id` nunca muda nem é reaproveitado**, porque é nele que o progresso fica gravado. Texto pode ser corrigido à vontade.
 
 ### Acrescentar uma pessoa
@@ -89,16 +93,18 @@ Depois abrir `http://localhost:8765`. Abrir o `index.html` direto pelo Finder ta
    - "Alget" virou Astton Medical;
    - textos de tela sem travessão.
 
+7. **25/09/2026, segunda leva (metodologia)**:
+   - o chunk novo agora é produzido (fala ou digitação), não só reconhecido;
+   - exercício "chunk na frase";
+   - 21 conversas para ouvir e fazer role-play;
+   - intervalos menos duros;
+   - metas por nível A1 a B1;
+   - aviso de que o microfone mede clareza, não sotaque.
+
 ## Próximas levas
 
-- **Metodologia**:
-  - produzir o chunk novo em vez de só reconhecê-lo;
-  - vários exemplos e substituição por chunk;
-  - mini-diálogos para ouvir;
-  - role-play falado;
-  - intervalos menos duros depois de um erro;
-  - níveis A1 a B1.
 - **Conteúdo**:
+  - vários exemplos e exercício de substituição por chunk;
   - baralhos maiores (hoje dão cerca de 2 semanas no ritmo padrão);
   - interesses da Dayane;
   - revisão das frases que soam pouco naturais.

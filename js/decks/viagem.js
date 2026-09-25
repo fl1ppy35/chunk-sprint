@@ -6,10 +6,10 @@ window.CS_DECKS = window.CS_DECKS || {};
 CS_DECKS.viagem = {
   name: 'Viagem e dia a dia',
   cats: [
-  {key:'diaadia', label:'Conversas do Dia a Dia'},
-  {key:'compras2', label:'Compras e Serviços'},
-  {key:'informacoes', label:'Pedindo Informações'},
-  {key:'imigracao', label:'Aeroporto e Imigração'}
+  {key:'diaadia', label:'Conversas do Dia a Dia', level:'A1', cando:'Cumprimentar, se apresentar e pedir para falarem mais devagar'},
+  {key:'compras2', label:'Compras e Serviços', level:'A1', cando:'Perguntar preço e tamanho, pagar e pedir o recibo numa loja'},
+  {key:'informacoes', label:'Pedindo Informações', level:'A1', cando:'Pedir direção e indicação de lugar na rua'},
+  {key:'imigracao', label:'Aeroporto e Imigração', level:'A2', cando:'Passar pela imigração e resolver problema de bagagem'}
   ],
   chunks: [
   ['t1','diaadia','Como você está?','How are you doing?','Hi, how are you doing today?'],

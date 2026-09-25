@@ -237,3 +237,15 @@
 
   .topbar-actions{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
   .toast{ position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom, 0px)); transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:10px 18px; border-radius:999px; font-size:.9rem; font-weight:600; box-shadow:var(--shadow); z-index:60; max-width:calc(100vw - 32px); text-align:center; }
+  .hint-letters{ font-size:1rem; letter-spacing:.04em; color:var(--ink-muted); }
+  .chat{ display:flex; flex-direction:column; gap:8px; width:100%; max-width:520px; }
+  .bubble{ padding:10px 14px; border-radius:14px; max-width:88%; text-align:left; font-size:.95rem; line-height:1.4; }
+  .bubble .who{ font-size:.68rem; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-muted); margin-bottom:2px; }
+  .bubble .pt{ font-size:.82rem; color:var(--ink-muted); margin-top:4px; }
+  .bubble.outro{ background:var(--surface-2); align-self:flex-start; border-bottom-left-radius:4px; }
+  .bubble.voce{ background:var(--blue-soft); align-self:flex-end; border-bottom-right-radius:4px; }
+  .level-tag{ font-family:'IBM Plex Mono',monospace; font-size:.68rem; font-weight:600; color:var(--blue); background:var(--blue-soft); border-radius:6px; padding:1px 6px; margin-left:6px; vertical-align:middle; }
+  .goal{ display:flex; flex-direction:column; gap:6px; padding:10px 0; border-top:1px solid var(--border); }
+  .goal:first-of-type{ border-top:none; }
+  .goal-head{ display:flex; justify-content:space-between; gap:10px; font-size:.9rem; }
+  .goal.done .goal-head b{ color:var(--good); }

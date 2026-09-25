@@ -6,15 +6,15 @@ window.CS_DECKS = window.CS_DECKS || {};
 CS_DECKS.negocios = {
   name: 'Negócios',
   cats: [
-  {key:'contato', label:'Primeiro Contato'},
-  {key:'precos', label:'Cotações e Preços'},
-  {key:'negociacao', label:'Negociação'},
-  {key:'logistica', label:'Pedidos e Logística'},
-  {key:'email', label:'E-mails e Follow-up'},
-  {key:'reunioes', label:'Telefonemas e Reuniões'},
-  {key:'problemas', label:'Problemas e Soluções'},
-  {key:'suporte', label:'Atendimento e Suporte'},
-  {key:'feiras', label:'Viagens e Feiras'}
+  {key:'contato', label:'Primeiro Contato', level:'A2', cando:'Se apresentar a um cliente ou fornecedor estrangeiro'},
+  {key:'precos', label:'Cotações e Preços', level:'B1', cando:'Pedir e discutir uma cotação'},
+  {key:'negociacao', label:'Negociação', level:'B1', cando:'Negociar preço e fechar um acordo'},
+  {key:'logistica', label:'Pedidos e Logística', level:'B1', cando:'Acompanhar pedido, prazo e entrega'},
+  {key:'email', label:'E-mails e Follow-up', level:'A2', cando:'Escrever e cobrar retorno por e-mail'},
+  {key:'reunioes', label:'Telefonemas e Reuniões', level:'A2', cando:'Conduzir uma call e lidar com falha de conexão'},
+  {key:'problemas', label:'Problemas e Soluções', level:'B1', cando:'Contornar reclamação de peça com defeito'},
+  {key:'suporte', label:'Atendimento e Suporte', level:'B1', cando:'Atender um chamado técnico e agendar visita'},
+  {key:'feiras', label:'Viagens e Feiras', level:'A2', cando:'Combinar um encontro numa feira internacional'}
   ],
   chunks: [
   ['f1','contato','Eu gostaria de me apresentar','I’d like to introduce myself','Hi, I’d like to introduce myself. I’m Felipe, from Astton Medical.'],

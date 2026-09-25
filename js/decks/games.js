@@ -6,14 +6,14 @@ window.CS_DECKS = window.CS_DECKS || {};
 CS_DECKS.games = {
   name: 'Games e tecnologia',
   cats: [
-  {key:'queue', label:'Entrando no Jogo'},
-  {key:'partida', label:'Durante a Partida'},
-  {key:'pc', label:'Montando o PC'},
-  {key:'streams', label:'Assistindo Streams'},
-  {key:'despedida', label:'Encontro e Despedida'},
-  {key:'times', label:'Torneios e Times'},
-  {key:'software', label:'Configurações e Software'},
-  {key:'historia', label:'História Mundial'}
+  {key:'queue', label:'Entrando no Jogo', level:'A1', cando:'Chamar alguém para jogar e entrar na call'},
+  {key:'partida', label:'Durante a Partida', level:'A2', cando:'Se comunicar com o time durante a partida'},
+  {key:'pc', label:'Montando o PC', level:'A2', cando:'Conversar sobre peças e montagem de PC'},
+  {key:'streams', label:'Assistindo Streams', level:'A2', cando:'Comentar uma live e pedir recomendação de jogo'},
+  {key:'despedida', label:'Encontro e Despedida', level:'A1', cando:'Encerrar a partida com educação'},
+  {key:'times', label:'Torneios e Times', level:'B1', cando:'Organizar um time para um campeonato'},
+  {key:'software', label:'Configurações e Software', level:'A2', cando:'Resolver um jogo travando'},
+  {key:'historia', label:'História Mundial', level:'B1', cando:'Conversar sobre fatos históricos'}
   ],
   chunks: [
   ['s1','queue','Bora jogar uma partida?','Wanna queue up?','Hey, wanna queue up for a match?'],

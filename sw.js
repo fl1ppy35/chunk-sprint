@@ -1,7 +1,7 @@
 /* Service worker: rede primeiro, cópia local como reserva.
    Com internet, sempre carrega a versão mais nova do GitHub Pages;
    sem internet, abre a última versão que ficou guardada no aparelho. */
-var CACHE = 'chunk-sprint-v1';
+var CACHE = 'chunk-sprint-v2';
 self.addEventListener('install', function(){ self.skipWaiting(); });
 self.addEventListener('activate', function(e){
   e.waitUntil(caches.keys().then(function(keys){

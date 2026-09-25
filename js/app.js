@@ -25,7 +25,7 @@ var REVIEW_DAY = 6; // sábado: só revisão, sem chunks novos (a não ser que a
 
 /* ---------- STATE ---------- */
 function defaultProfileState(){
-  return { cards:{}, streak:0, longestStreak:0, lastDoneDate:null, log:{}, settings:{pace:6} };
+  return { cards:{}, streak:0, longestStreak:0, lastDoneDate:null, log:{}, settings:{pace:6}, dialogs:{} };
 }
 var STATE = { activeProfile: PROFILE_KEYS[0], profiles: {} };
 PROFILE_KEYS.forEach(function(k){ STATE.profiles[k] = defaultProfileState(); });
@@ -215,6 +215,7 @@ function speak(text, opts){
     speechSynthesis.speak(u);
   }catch(e){}
 }
+function stopSpeaking(){ try{ speechSynthesis.cancel(); }catch(e){} }
 function autoSpeak(text){ if(AUDIO.autoplay) setTimeout(function(){ speak(text); }, 120); }
 if(HAS_TTS){ speechSynthesis.onvoiceschanged = function(){ /* vozes chegaram; nada a fazer, bestVoice() lê na hora */ }; try{ speechSynthesis.getVoices(); }catch(e){} }
 
@@ -289,6 +290,21 @@ function diffTarget(target, answer){
   }).join('');
 }
 
+/* dica de iniciais: "I’d like to introduce myself" → "I’_ l___ t_ i________ m_____" */
+function initialsHint(en){
+  return en.split(/\s+/).map(function(w){
+    return w.replace(/^([^A-Za-z]*[A-Za-z])(.*)$/, function(m, first, rest){
+      return first + rest.replace(/[A-Za-z]/g, '_');
+    });
+  }).join('  ');
+}
+/* das alternativas que o reconhecedor devolve, fica a mais parecida com o alvo */
+function bestAlternative(alts, target){
+  var best = null;
+  alts.forEach(function(t){ var s = similarity(t, target); if(!best || s > best.score) best = {transcript:t, score:s}; });
+  return best;
+}
+
 /* ---------- RECONHECIMENTO DE FALA (revisão, shadowing) ---------- */
 var recog = null;
 var IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent||'') || (/Mac/.test(navigator.platform||'') && navigator.maxTouchPoints > 1);
@@ -353,6 +369,7 @@ function newSession(reviewQueue, newQueue){
     ratedIds: [], learnedIds: [],
     practiceQueue: [], practiceIndex: 0, ex:null, retried:{}, lastExType:null,
     shadowQueue: [], shadowIndex: 0, shadow:null,
+    dialog:null, standalone:false,
     stats:{ pRight:0, pTotal:0, newRight:0, newTotal:0, shadowScores:[] }
   };
 }
@@ -384,16 +401,24 @@ function buildPracticeQueue(){
   session.shadowQueue = shuffle(list);
   session.practiceIndex = 0; session.ex = null;
   if(!session.practiceQueue.length){ session.step = 'shadow'; }
-  if(!session.shadowQueue.length && session.step==='shadow'){ finishSession(); }
+  if(!session.shadowQueue.length && session.step==='shadow'){ goToDialogOrFinish(); }
+}
+/* Intervalos. Antes, um erro devolvia o chunk para a caixa 0 mesmo que ele
+   estivesse quase dominado, e "Difícil" só mantinha o intervalo. Agora:
+   - Errei: desce 2 caixas (não zera) e volta amanhã;
+   - Difícil: fica na caixa, com metade do intervalo;
+   - Fácil: sobe uma caixa. */
+function nextInterval(card, rating){
+  if(rating === 'again'){ card.box = Math.max(0, card.box-2); card.lapses++; return 1; }
+  if(rating === 'hard'){ return Math.max(1, Math.round(INTERVALS[card.box]/2)); }
+  card.box = Math.min(5, card.box+1);
+  return INTERVALS[card.box];
 }
 function rateCard(chunk, rating){
   var st = activeState();
   var card = st.cards[chunk.id] || { box:0, reps:0, lapses:0 };
-  if(rating === 'again'){ card.box = 0; card.lapses++; }
-  else if(rating === 'hard'){ /* stay */ }
-  else if(rating === 'easy'){ card.box = Math.min(5, card.box+1); }
   card.reps++;
-  card.due = addDays(todayStr(), INTERVALS[card.box]);
+  card.due = addDays(todayStr(), nextInterval(card, rating));
   st.cards[chunk.id] = card;
   session.ratedIds.push(chunk.id);
   saveProfile(STATE.activeProfile);
@@ -430,9 +455,87 @@ function advancePractice(){
 function advanceShadow(){
   stopListening();
   session.shadowIndex++; session.shadow = null;
-  if(session.shadowIndex >= session.shadowQueue.length){ finishSession(); return; }
+  if(session.shadowIndex >= session.shadowQueue.length){ goToDialogOrFinish(); return; }
   render();
 }
+/* ---------- CONVERSAS (bloco 5) ----------
+   Uma conversa por sessão, escolhida entre as liberadas (todos os chunks dela
+   já aprendidos), dando preferência à que foi praticada há mais tempo. */
+function dialogsFor(profileKey){
+  var deck = PROFILES[profileKey], st = STATE.profiles[profileKey];
+  var G = window.CS_DIALOGS || {};
+  return deck.cats.filter(function(c){ return G[c.key]; }).map(function(c){
+    var g = G[c.key];
+    var learned = g.usa.filter(function(id){ return st.cards[id]; }).length;
+    return { key:c.key, cat:c, d:g, learned:learned, total:g.usa.length, unlocked: learned===g.usa.length, last:(st.dialogs||{})[c.key]||null };
+  });
+}
+function pickDialog(){
+  var today = todayStr();
+  var open = dialogsFor(STATE.activeProfile).filter(function(x){ return x.unlocked && x.last !== today; });
+  if(!open.length) return null;
+  open.sort(function(a,b){ return (a.last||'') < (b.last||'') ? -1 : ((a.last||'') > (b.last||'') ? 1 : 0); });
+  return open[0].key;
+}
+function startDialog(key){
+  session.step = 'dialog';
+  session.dialog = { key:key, phase:'listen', showText:false, showPt:false, idx:0, turns:{}, playing:false };
+}
+function goToDialogOrFinish(){
+  stopListening();
+  var key = pickDialog();
+  if(key){ startDialog(key); render(); } else finishSession();
+}
+function finishDialog(){
+  var st = activeState();
+  st.dialogs = st.dialogs || {};
+  st.dialogs[session.dialog.key] = todayStr();
+  saveProfile(STATE.activeProfile);
+  if(session.standalone){
+    var dlgName = window.CS_DIALOGS[session.dialog.key].titulo;
+    session = null; route = 'baralho'; render();
+    showNotice('Conversa concluída: '+dlgName);
+    return;
+  }
+  finishSession();
+}
+function startStandaloneDialog(key){
+  session = newSession([], []);
+  session.standalone = true;
+  startDialog(key);
+  route = 'hoje';
+  render();
+}
+/* segunda voz para o "outro" da conversa: a próxima melhor voz em inglês;
+   se o aparelho só tiver uma, a mesma voz um pouco mais grave */
+function otherVoice(){
+  var vs = rankedVoices(), mine = bestVoice();
+  var alt = vs.find(function(v){ return mine && v.name !== mine.name && voiceScore(v) >= 0; });
+  return alt || null;
+}
+function speakLine(text, who, onend){
+  if(!HAS_TTS){ if(onend) onend(); return; }
+  try{
+    var u = new SpeechSynthesisUtterance(humanizeForSpeech(text));
+    var v = who==='outro' ? (otherVoice() || bestVoice()) : bestVoice();
+    if(v){ u.voice = v; u.lang = v.lang; } else u.lang = 'en-US';
+    u.rate = AUDIO.rate;
+    u.pitch = (who==='outro' && !otherVoice()) ? 0.85 : 1;
+    var done = false;
+    u.onend = u.onerror = function(){ if(done) return; done = true; if(onend) onend(); };
+    speechSynthesis.speak(u);
+  }catch(e){ if(onend) onend(); }
+}
+function playConversation(falas, onDone){
+  stopSpeaking();
+  var i = 0;
+  (function next(){
+    if(!session || !session.dialog || !session.dialog.playing || i >= falas.length){ if(onDone) onDone(); return; }
+    var f = falas[i++];
+    speakLine(f[1], f[0], function(){ setTimeout(next, 350); });
+  })();
+}
+
 function finishSession(){
   var st = activeState(), today = todayStr();
   var prevLog = st.log[today] || { reviewCount:0, newCount:0 };
@@ -462,13 +565,23 @@ function clozeWord(en){
   cands.sort(function(a,b){ return b.n.length-a.n.length; });
   return pick(cands.slice(0, Math.min(3, cands.length)));
 }
+/* acha o chunk dentro da frase de exemplo, para treinar o chunk em contexto */
+function contextBlank(chunk){
+  var norm = function(x){ return x.replace(/[’‘]/g,"'"); };
+  var target = norm(chunk.en).replace(/[.?!…]+$/,'').replace(/\.\.\.$/,'').trim();
+  var ex = norm(chunk.ex);
+  var i = ex.toLowerCase().indexOf(target.toLowerCase());
+  if(i === -1 || target.length < 6 || ex.length - target.length < 6) return null;
+  return { before: chunk.ex.slice(0, i), answer: chunk.ex.slice(i, i+target.length), after: chunk.ex.slice(i+target.length) };
+}
 function pickExerciseType(chunk){
   var box = (activeState().cards[chunk.id]||{}).box||0;
   var words = chunk.en.split(/\s+/).length;
   var pool;
-  if(box<=1) pool=['choice','scramble','cloze','type'];
-  else if(box<=3) pool=['scramble','cloze','type','dictation'];
-  else pool=['type','dictation','cloze','type'];
+  if(box<=1) pool=['choice','scramble','cloze','type','context'];
+  else if(box<=3) pool=['scramble','cloze','type','dictation','context'];
+  else pool=['type','dictation','context','type'];
+  if(!contextBlank(chunk)) pool = pool.filter(function(t){ return t!=='context'; });
   if(words<4) pool = pool.filter(function(t){ return t!=='scramble'; });
   if(!HAS_TTS) pool = pool.filter(function(t){ return t!=='dictation'; });
   if(!pool.length) pool=['type'];
@@ -488,6 +601,7 @@ function buildExercise(chunk){
     ex.tiles = order.map(function(i){ return {w:words[i], used:false}; });
     ex.picked = [];
   }
+  if(type==='context'){ ex.ctx = contextBlank(chunk); }
   if(type==='cloze'){
     var cw = clozeWord(chunk.en);
     if(!cw){ ex.type='type'; } else { ex.cloze = cw; }
@@ -530,7 +644,7 @@ function feedbackHtml(res, chunk, answer, opts){
   opts = opts || {};
   var title = res==='ok' ? '✅ Certo!' : (res==='almost' ? '🟡 Quase. Olha o detalhe:' : '❌ Ainda não. A forma certa:');
   var h = '<div class="feedback '+res+'"><div>'+title+'</div>';
-  h += '<div class="target">'+(res==='ok' ? esc(chunk.en) : diffTarget(chunk.en, answer))+'</div>';
+  h += '<div class="target">'+(res==='ok' || !answer ? esc(chunk.en) : diffTarget(chunk.en, answer))+'</div>';
   if(res!=='ok' && answer && !opts.hideSaid) h += '<div class="said">Você: “'+esc(answer)+'”</div>';
   h += '</div>';
   return h;
@@ -638,7 +752,7 @@ function viewDashboard(){
   else if(caughtUp) msg = 'Baralho em dia: nada vencendo hoje e nenhum chunk novo nesse ritmo. Sinal de que está indo bem. Dá para fazer uma revisão bônus.';
   else if(doneToday) msg = 'Sessão de hoje concluída. Pode repetir para praticar mais.';
   else if(isSat) msg = 'Sábado é dia só de revisão: '+due+' chunk(s) para revisar, sem conteúdo novo. É o dia de zerar o que ficou pendente na semana.';
-  else msg = 'Pronto para a sessão de hoje? '+due+' para revisar e '+newToday+' chunk(s) novo(s). A sessão tem 4 blocos: revisão, novos, exercícios variados e shadowing.';
+  else msg = 'Pronto para a sessão de hoje? '+due+' para revisar e '+newToday+' chunk(s) novo(s). A sessão tem 5 blocos: revisão, novos, exercícios, shadowing e uma conversa, quando houver uma liberada.';
   html += '<p class="muted">'+msg+'</p>';
   html += '<div class="cta-row" style="margin-top:12px;">';
   if(caughtUp){
@@ -671,9 +785,9 @@ function statTile(num,label){
 function viewSession(){
   if(!session){ viewDashboard(); return; }
   var v = document.getElementById('view');
-  var steps = ['review','new','practice','shadow','done'];
+  var steps = ['review','new','practice','shadow','dialog','done'];
   var curIdx = steps.indexOf(session.step);
-  var stepper = '<div class="stepper">' + steps.slice(0,4).map(function(s,i){
+  var stepper = session.standalone ? '' : '<div class="stepper">' + steps.slice(0,5).map(function(s,i){
     var cls = i < curIdx ? 'done' : (i === curIdx ? 'now' : '');
     return '<div class="seg '+cls+'"></div>';
   }).join('') + '</div>';
@@ -762,7 +876,10 @@ function viewSession(){
     return;
   }
 
-  /* ---- 2. CHUNKS NOVOS (mostrar → checagem rápida) ---- */
+  /* ---- 2. CHUNKS NOVOS (mostrar → produzir) ----
+     Antes a checagem era de múltipla escolha, que só testa reconhecimento.
+     Agora a pessoa precisa PRODUZIR o chunk (falar ou digitar) a partir do
+     português: é o esforço de lembrar que fixa. Dica de iniciais opcional. */
   if(session.step === 'new'){
     var chunk = session.newQueue[session.newIndex];
     var html = stepper + sectionLabel('Chunks novos', (session.newIndex+1)+' de '+session.newQueue.length);
@@ -770,21 +887,30 @@ function viewSession(){
     if(session.newPhase==='show'){
       html += '<div class="kicker">'+esc(chunk.pt)+'</div>';
       html += '<div class="back"><div class="en">'+esc(chunk.en)+'</div><div class="ex">“'+esc(chunk.ex)+'”</div>'+soundRow(chunk)+'</div>';
-      html += '<p class="muted" style="margin:0; max-width:46ch;">Ouça, repita em voz alta 2 ou 3 vezes imitando a entonação, e só então avance.</p>';
+      html += '<p class="muted" style="margin:0; max-width:46ch;">Ouça, repita em voz alta 2 ou 3 vezes imitando a entonação. Depois você vai ter que dizer sozinho, sem ver.</p>';
       html += '<div class="cta-row" style="justify-content:center; margin-top:6px;">';
-      html += '<button class="btn btn-primary" id="learnBtn">Entendi, me testa →</button>';
+      html += '<button class="btn btn-primary" id="learnBtn">Entendi, me testa <span class="kbd">Enter</span></button>';
       html += '</div>';
     } else {
       var chk = session.newCheck;
-      html += '<div class="ex-tag">Checagem rápida</div>';
-      html += '<div class="kicker">Qual é o chunk pra…</div><div class="front">'+esc(chunk.pt)+'</div>';
-      html += '<div class="choice-list">'+chk.options.map(function(o,i){
-        var cls = '';
-        if(chk.answered){ if(o.id===chunk.id) cls=' right'; else if(o.id===chk.answered) cls=' wrong'; }
-        return '<button class="choice-btn'+cls+'" data-id="'+o.id+'" '+(chk.answered?'disabled':'')+'><span class="k">'+(i+1)+'</span>'+esc(o.en)+'</button>';
-      }).join('')+'</div>';
-      if(chk.answered){
-        html += chk.answered===chunk.id ? '<div class="feedback ok">✅ Isso. Já está na sua fila de revisão.</div>' : '<div class="feedback bad">❌ Era <b>'+esc(chunk.en)+'</b>. Sem problema, ele volta amanhã.</div>';
+      html += '<div class="ex-tag">Agora é com você</div>';
+      html += '<div class="kicker">Diga ou escreva em inglês, sem olhar</div><div class="front">'+esc(chunk.pt)+'</div>';
+      if(chk.hint && !chk.answered) html += '<div class="hint-letters mono">'+esc(initialsHint(chunk.en))+'</div>';
+      if(!chk.answered){
+        html += '<input class="practice-input" id="newInput" placeholder="escreva em inglês…" autocomplete="off" autocapitalize="off" spellcheck="false" value="'+esc(chk.answer||'')+'" />';
+        if(SR){
+          html += '<button class="mic-btn'+(chk.listening?' listening':'')+'" id="newMic">'+(chk.listening?'🎙️ Ouvindo… fale agora':'🎤 Falar em vez de digitar')+'</button>';
+          if(chk.error) html += '<div class="tip">'+micErrorText(chk.error)+'</div>';
+        }
+        html += '<div class="cta-row" style="justify-content:center;">';
+        html += '<button class="btn btn-primary" id="checkNew">Conferir <span class="kbd">Enter</span></button>';
+        if(!chk.hint) html += '<button class="btn btn-ghost" id="newHint">Dica</button>';
+        html += '<button class="btn btn-ghost" id="newGiveUp">Não lembro</button>';
+        html += '</div>';
+      } else {
+        html += feedbackHtml(chk.result, chunk, chk.answer);
+        html += '<div class="tip">'+(chk.result==='bad' ? 'Sem problema: ele volta amanhã e de novo na prática de hoje.' : (chk.hint ? 'Com dica, mas saiu. Ele volta amanhã para fixar.' : 'Saiu de memória. Já está na sua fila de revisão.'))+'</div>';
+        html += soundRow(chunk, {example:false});
         html += '<div class="cta-row" style="justify-content:center;"><button class="btn btn-primary" id="nextNew">Próximo <span class="kbd">Enter</span></button></div>';
       }
     }
@@ -794,23 +920,45 @@ function viewSession(){
     if(session.newPhase==='show'){
       if(!session.newShown || session.newShown!==chunk.id){ session.newShown = chunk.id; autoSpeak(chunk.en); }
       document.getElementById('learnBtn').onclick = function(){
+        stopSpeaking();
         session.newPhase='check';
-        session.newCheck = { options: shuffle([chunk].concat(distractors(chunk,3))), answered:null };
+        session.newCheck = { answered:false, result:null, answer:'', hint:false, listening:false, error:null };
         render();
       };
     } else {
-      v.querySelectorAll('.choice-btn').forEach(function(b){
-        b.onclick = function(){
-          if(session.newCheck.answered) return;
-          session.newCheck.answered = b.dataset.id;
-          session.stats.newTotal++;
-          var ok = b.dataset.id===chunk.id;
-          if(ok) session.stats.newRight++;
-          learnCard(chunk, 0);
-          render();
-          speak(chunk.en);
+      var chk2 = session.newCheck;
+      var finishNew = function(answer, result){
+        chk2.answer = answer; chk2.result = result; chk2.answered = true;
+        session.stats.newTotal++;
+        if(result !== 'bad') session.stats.newRight++;
+        learnCard(chunk, 0);
+        render();
+        speak(chunk.en);
+      };
+      var ni = document.getElementById('newInput');
+      if(ni){
+        ni.focus();
+        ni.oninput = function(){ chk2.answer = ni.value; };
+        var doCheckNew = function(){ var val = ni.value.trim(); if(!val) return; finishNew(val, grade(val, chunk.en)); };
+        document.getElementById('checkNew').onclick = doCheckNew;
+        bindEnter(ni, doCheckNew);
+        var nh = document.getElementById('newHint'); if(nh) nh.onclick = function(){ chk2.hint = true; render(); };
+        document.getElementById('newGiveUp').onclick = function(){ finishNew(ni.value.trim(), 'bad'); };
+        var nm = document.getElementById('newMic');
+        if(nm) nm.onclick = function(){
+          if(chk2.listening){ stopListening(); return; }
+          stopSpeaking();
+          chk2.listening = true; chk2.error = null; render();
+          var heard = null;
+          listenOnce(function(alts){ heard = bestAlternative(alts, chunk.en); },
+            function(err){ chk2.error = err; },
+            function(){
+              chk2.listening = false;
+              if(heard){ finishNew(heard.transcript, reviewGrade(heard.transcript, chunk.en)); }
+              else render();
+            });
         };
-      });
+      }
       var nn = document.getElementById('nextNew'); if(nn) nn.onclick = advanceNew;
     }
     return;
@@ -822,7 +970,7 @@ function viewSession(){
     var chunk = session.practiceQueue[session.practiceIndex];
     if(!session.ex || session.ex.chunkId!==chunk.id){ session.ex = buildExercise(chunk); if(session.ex.type==='dictation') autoSpeak(chunk.en); }
     var ex = session.ex;
-    var labels = {type:'Digite de memória', choice:'Múltipla escolha', scramble:'Monte a frase', dictation:'Ditado', cloze:'Complete a lacuna'};
+    var labels = {type:'Digite de memória', choice:'Múltipla escolha', scramble:'Monte a frase', dictation:'Ditado', cloze:'Complete a lacuna', context:'Chunk na frase'};
     var html = stepper + sectionLabel('Prática ativa', (session.practiceIndex+1)+' de '+session.practiceQueue.length);
     html += '<div class="flashcard">';
     html += '<div class="ex-tag">'+labels[ex.type]+'</div>';
@@ -842,6 +990,11 @@ function viewSession(){
       html += '<div class="muted">'+esc(chunk.pt)+'</div>';
       html += '<div class="cloze">'+toks.map(function(t,i){ return i===ex.cloze.i ? '<span class="blank">'+(ex.done?esc(t):'')+'</span>' : esc(t); }).join(' ')+'</div>';
       html += '<input class="practice-input'+(ex.done?(ex.result==='bad'?' bad':' ok'):'')+'" id="pInput" placeholder="a palavra que falta" autocomplete="off" autocapitalize="off" spellcheck="false" value="'+esc(ex.answer)+'" '+(ex.done?'disabled':'')+' style="max-width:240px;" />';
+    }
+    if(ex.type==='context'){
+      html += '<div class="kicker">Complete a frase com o chunk: <b>'+esc(chunk.pt)+'</b></div>';
+      html += '<div class="cloze" style="font-size:1.1rem;">'+esc(ex.ctx.before)+'<span class="blank">'+(ex.done?esc(ex.ctx.answer):'&nbsp;')+'</span>'+esc(ex.ctx.after)+'</div>';
+      html += '<input class="practice-input'+(ex.done?(ex.result==='bad'?' bad':' ok'):'')+'" id="pInput" placeholder="o chunk que falta…" autocomplete="off" autocapitalize="off" spellcheck="false" value="'+esc(ex.answer)+'" '+(ex.done?'disabled':'')+' />';
     }
     if(ex.type==='choice'){
       html += '<div class="front">'+esc(chunk.pt)+'</div>';
@@ -892,7 +1045,7 @@ function viewSession(){
       if(inp){ inp.focus(); inp.oninput = function(){ ex.answer = inp.value; }; }
       var checkBtn = document.getElementById('checkBtn');
       var doCheck = function(){
-        if(ex.type==='type' || ex.type==='dictation'){
+        if(ex.type==='type' || ex.type==='dictation' || ex.type==='context'){
           var val = inp.value.trim(); if(!val) return;
           finishEx(val, grade(val, chunk.en));
         } else if(ex.type==='cloze'){
@@ -942,6 +1095,7 @@ function viewSession(){
         var cls = pct>=85?'ok':(pct>=65?'almost':'bad');
         var head = pct>=85 ? '🎉 Excelente, '+pct+'% de correspondência' : (pct>=65 ? '👍 Bom, '+pct+'%. Repita as palavras marcadas:' : '🔁 '+pct+'%. Ouça de novo, devagar, e tente outra vez:');
         html += '<div class="feedback '+cls+'"><div>'+head+'</div><div class="target">'+diffTarget(chunk.en, sh.best.transcript)+'</div><div class="said">Entendi: “'+esc(sh.best.transcript)+'”</div></div>';
+        html += '<p class="kbd-hint" style="max-width:46ch;">A porcentagem mostra o quanto o reconhecedor entendeu da sua fala. É um bom sinal de clareza, mas não é uma nota de sotaque.</p>';
       } else if(sh.error){
         var em = micErrorText(sh.error);
         html += '<div class="feedback almost">'+em+'</div>';
@@ -971,7 +1125,103 @@ function viewSession(){
     return;
   }
 
-  /* ---- 5. FIM ---- */
+  /* ---- 5. CONVERSA (ouvir → fazer o seu papel) ---- */
+  if(session.step === 'dialog'){
+    var dl = session.dialog, g = window.CS_DIALOGS[dl.key], falas = g.falas;
+    var bubble = function(f, showEn, showPt){
+      return '<div class="bubble '+f[0]+'"><div class="who">'+(f[0]==='voce'?'Você':'Outra pessoa')+'</div>'+
+        (showEn ? '<div>'+esc(f[1])+'</div>' : '<div class="muted">🔊 …</div>')+
+        (showPt ? '<div class="pt">'+esc(f[2])+'</div>' : '')+'</div>';
+    };
+    var html = stepper + sectionLabel('Conversa: '+esc(g.titulo), dl.phase==='listen' ? 'ouvir' : (dl.idx < falas.length ? 'fala '+(dl.idx+1)+' de '+falas.length : 'fim'));
+    html += '<div class="flashcard">';
+    if(dl.phase==='listen'){
+      html += '<div class="ex-tag">1. Ouça</div>';
+      html += '<p class="muted" style="margin:0; max-width:48ch;">Ouça a conversa inteira antes de ler. Tente entender pelo contexto: você já conhece os chunks que aparecem nela.</p>';
+      html += '<button class="sound-btn" id="dlgPlay">'+(dl.playing ? '⏹ Parar' : '▶️ Ouvir a conversa')+'</button>';
+      if(dl.showText){
+        html += '<div class="chat">'+falas.map(function(f){ return bubble(f, true, dl.showPt); }).join('')+'</div>';
+        html += '<button class="btn btn-ghost" id="dlgPt">'+(dl.showPt ? 'Esconder tradução' : 'Mostrar tradução')+'</button>';
+      } else {
+        html += '<button class="btn btn-ghost" id="dlgText">Mostrar o texto</button>';
+      }
+      html += '<div class="cta-row" style="justify-content:center;"><button class="btn btn-primary" id="dlgStart">2. Agora faça o seu papel <span class="kbd">Enter</span></button></div>';
+    } else if(dl.idx < falas.length){
+      var cur = falas[dl.idx];
+      html += '<div class="ex-tag">2. Sua vez de falar</div>';
+      html += '<div class="chat">'+falas.slice(0, dl.idx).map(function(f){ return bubble(f, true, false); }).join('');
+      if(cur[0]==='outro'){
+        html += bubble(cur, true, false)+'</div>';
+        html += '<div class="sound-row"><button class="sound-btn" id="dlgRepeat">🔊 Ouvir de novo</button></div>';
+        html += '<div class="cta-row" style="justify-content:center;"><button class="btn btn-primary" id="dlgNext">Continuar <span class="kbd">Enter</span></button></div>';
+      } else {
+        html += '</div>';
+        var tn = dl.turns[dl.idx] || (dl.turns[dl.idx] = { answered:false, result:null, answer:'', listening:false, error:null });
+        html += '<div class="kicker">Responda em inglês</div><div class="front" style="font-size:1.1rem;">'+esc(cur[2])+'</div>';
+        if(!tn.answered){
+          if(SR){
+            html += '<button class="mic-btn'+(tn.listening?' listening':'')+'" id="dlgMic">'+(tn.listening?'🎙️ Ouvindo… fale agora':'🎤 Falar a minha fala')+'</button>';
+            if(tn.error) html += '<div class="tip">'+micErrorText(tn.error)+'</div>';
+          }
+          html += '<input class="practice-input" id="dlgInput" placeholder="ou escreva aqui…" autocomplete="off" autocapitalize="off" spellcheck="false" value="'+esc(tn.answer)+'" />';
+          html += '<div class="cta-row" style="justify-content:center;"><button class="btn btn-primary" id="dlgCheck">Conferir <span class="kbd">Enter</span></button><button class="btn btn-ghost" id="dlgShow">Mostrar a fala</button></div>';
+        } else {
+          html += feedbackHtml(tn.result, {en:cur[1]}, tn.answer, {hideSaid: !tn.answer});
+          html += '<div class="sound-row"><button class="sound-btn" data-say="'+esc(cur[1])+'">🔊 Ouvir a fala</button></div>';
+          html += '<div class="cta-row" style="justify-content:center;"><button class="btn btn-primary" id="dlgNext">Continuar <span class="kbd">Enter</span></button></div>';
+        }
+      }
+    } else {
+      var mine = falas.map(function(f,i){ return f[0]==='voce' ? dl.turns[i] : null; }).filter(Boolean);
+      var okCount = mine.filter(function(t){ return t.result !== 'bad'; }).length;
+      html += '<div class="ex-tag">Conversa completa</div>';
+      html += '<div class="score-ring">'+okCount+' de '+mine.length+'</div>';
+      html += '<p class="muted" style="margin:0; max-width:46ch;">'+(okCount===mine.length ? 'Você deu conta da conversa inteira. É isso que o chunk decorado vira: fala de verdade.' : 'As falas que escaparam mostram quais chunks ainda precisam de revisão. Eles voltam nos próximos dias.')+'</p>';
+      html += '<div class="chat">'+falas.map(function(f){ return bubble(f, true, true); }).join('')+'</div>';
+      html += '<div class="cta-row" style="justify-content:center;"><button class="btn btn-primary" id="dlgDone">Concluir <span class="kbd">Enter</span></button></div>';
+    }
+    html += '</div>';
+    v.innerHTML = html;
+    bindSound(v);
+
+    var byId = function(id){ return document.getElementById(id); };
+    if(byId('dlgPlay')) byId('dlgPlay').onclick = function(){
+      if(dl.playing){ dl.playing = false; stopSpeaking(); render(); return; }
+      dl.playing = true; render();
+      playConversation(falas, function(){ if(session && session.dialog===dl){ dl.playing = false; render(); } });
+    };
+    if(byId('dlgText')) byId('dlgText').onclick = function(){ dl.showText = true; render(); };
+    if(byId('dlgPt')) byId('dlgPt').onclick = function(){ dl.showPt = !dl.showPt; render(); };
+    if(byId('dlgStart')) byId('dlgStart').onclick = function(){ dl.playing = false; stopSpeaking(); dl.phase = 'roleplay'; dl.idx = 0; dl.spoken = -1; render(); };
+    if(dl.phase==='roleplay' && dl.idx < falas.length && falas[dl.idx][0]==='outro' && dl.spoken !== dl.idx){
+      dl.spoken = dl.idx; speakLine(falas[dl.idx][1], 'outro');
+    }
+    if(byId('dlgRepeat')) byId('dlgRepeat').onclick = function(){ stopSpeaking(); speakLine(falas[dl.idx][1], 'outro'); };
+    if(byId('dlgNext')) byId('dlgNext').onclick = function(){ stopListening(); stopSpeaking(); dl.idx++; render(); };
+    if(byId('dlgDone')) byId('dlgDone').onclick = finishDialog;
+    var di = byId('dlgInput');
+    if(di){
+      var tn2 = dl.turns[dl.idx], target = falas[dl.idx][1];
+      var answerTurn = function(ans, res){ tn2.answer = ans; tn2.result = res; tn2.answered = true; render(); if(res!=='bad') speakLine(target, 'voce'); };
+      di.oninput = function(){ tn2.answer = di.value; };
+      var doDlgCheck = function(){ var val = di.value.trim(); if(!val) return; answerTurn(val, reviewGrade(val, target)); };
+      byId('dlgCheck').onclick = doDlgCheck;
+      bindEnter(di, doDlgCheck);
+      byId('dlgShow').onclick = function(){ answerTurn('', 'bad'); };
+      var dm = byId('dlgMic');
+      if(dm) dm.onclick = function(){
+        if(tn2.listening){ stopListening(); return; }
+        stopSpeaking();
+        tn2.listening = true; tn2.error = null; render();
+        var heard = null;
+        listenOnce(function(alts){ heard = bestAlternative(alts, target); }, function(err){ tn2.error = err; },
+          function(){ tn2.listening = false; if(heard) answerTurn(heard.transcript, reviewGrade(heard.transcript, target)); else render(); });
+      };
+    }
+    return;
+  }
+
+  /* ---- 6. FIM ---- */
   if(session.step === 'done'){
     var s = session.stats;
     var acc = s.pTotal ? Math.round(s.pRight/s.pTotal*100) : null;
@@ -1010,7 +1260,7 @@ document.addEventListener('keydown', function(e){
   var typing = tag==='INPUT' || tag==='TEXTAREA' || tag==='SELECT';
   if(document.querySelector('.modal-backdrop')) return;
   if(e.key==='Enter' && !typing){
-    var ids = ['revealBtn','learnBtn','nextNew','checkBtn','nextPractice','nextShadow','backHome'];
+    var ids = ['revealBtn','learnBtn','nextNew','checkNew','checkBtn','nextPractice','nextShadow','dlgStart','dlgNext','dlgCheck','dlgDone','backHome'];
     for(var i=0;i<ids.length;i++){ var b=document.getElementById(ids[i]); if(b){ e.preventDefault(); b.click(); return; } }
   }
   if(!typing && (e.key===' ')){ var s=document.querySelector('[data-say]:not([data-slow])'); if(s){ e.preventDefault(); s.click(); } }
@@ -1024,20 +1274,31 @@ document.addEventListener('keydown', function(e){
 function viewDeck(){
   var st = activeState(), deck = activeDeck();
   var html = '<div class="card"><h2>Baralho de '+esc(deck.name)+'</h2><p class="muted">Toque em um chunk pra ver a tradução e ouvir a pronúncia. Quanto mais forte a cor da bolinha, mais perto de dominado; verde é dominado.</p></div>';
+  var dlgs = {}; dialogsFor(STATE.activeProfile).forEach(function(x){ dlgs[x.key] = x; });
   deck.cats.forEach(function(cat){
     var items = deck.chunks.filter(function(c){ return c.cat === cat.key; });
-    html += '<div class="card cat-block"><div class="cat-title">'+esc(cat.label)+'<span class="muted mono" style="font-weight:500; font-size:.76rem;">'+items.filter(function(c){return st.cards[c.id];}).length+'/'+items.length+'</span></div>';
+    html += '<div class="card cat-block"><div class="cat-title"><span>'+esc(cat.label)+(cat.level ? ' <span class="level-tag">'+cat.level+'</span>' : '')+'</span><span class="muted mono" style="font-weight:500; font-size:.76rem;">'+items.filter(function(c){return st.cards[c.id];}).length+'/'+items.length+'</span></div>';
     html += '<div class="chip-row">';
     items.forEach(function(c){
       var card = st.cards[c.id];
       var color = card ? boxColor(card.box) : 'var(--surface-2)';
       html += '<button class="chip" data-id="'+c.id+'"><span class="dot" style="background:'+color+'"></span>'+esc(c.pt)+'</button>';
     });
-    html += '</div></div>';
+    html += '</div>';
+    var dx = dlgs[cat.key];
+    if(dx){
+      html += dx.unlocked
+        ? '<button class="btn btn-secondary dlg-open" data-dlg="'+cat.key+'" style="align-self:flex-start;">💬 Conversa: '+esc(dx.d.titulo)+(dx.last ? ' <span class="muted" style="font-weight:500;">· feita</span>' : '')+'</button>'
+        : '<div class="tip">🔒 Conversa “'+esc(dx.d.titulo)+'”: libera quando você aprender os chunks dela ('+dx.learned+' de '+dx.total+').</div>';
+    }
+    html += '</div>';
   });
   document.getElementById('view').innerHTML = html;
   document.querySelectorAll('.chip').forEach(function(chip){
     chip.onclick = function(){ openChunkModal(chip.dataset.id); };
+  });
+  document.querySelectorAll('.dlg-open').forEach(function(b){
+    b.onclick = function(){ startStandaloneDialog(b.dataset.dlg); };
   });
 }
 function openChunkModal(id){
@@ -1065,6 +1326,38 @@ function openChunkModal(id){
   autoSpeak(chunk.en);
 }
 
+/* Metas por nível (A1, A2, B1). Uma categoria conta como "consigo" quando
+   80% dos chunks dela estão firmes (caixa 2 ou acima, ou seja, lembrados em
+   pelo menos duas revisões espaçadas). */
+var LEVELS = ['A1','A2','B1'];
+var LEVEL_NAMES = {A1:'A1 · Básico', A2:'A2 · Básico avançado', B1:'B1 · Intermediário'};
+function goalsCard(st, deck){
+  var byLevel = {};
+  deck.cats.forEach(function(cat){
+    var items = deck.chunks.filter(function(c){ return c.cat === cat.key; });
+    var firm = items.filter(function(c){ var k = st.cards[c.id]; return k && k.box >= 2; }).length;
+    var pct = items.length ? firm/items.length : 0;
+    (byLevel[cat.level||'A1'] = byLevel[cat.level||'A1'] || []).push({cat:cat, firm:firm, total:items.length, pct:pct, done:pct>=0.8});
+  });
+  var reached = null;
+  for(var i=0;i<LEVELS.length;i++){
+    var lv = byLevel[LEVELS[i]];
+    if(!lv) continue;
+    if(lv.every(function(x){ return x.done; })) reached = LEVELS[i]; else break;
+  }
+  var h = '<div class="card"><h2>O que você já consegue fazer</h2>';
+  h += '<p class="muted">'+(reached ? 'Você completou as metas do nível <b>'+reached+'</b> neste baralho.' : 'Cada meta se cumpre quando 80% dos chunks da categoria estão firmes, lembrados em pelo menos duas revisões espaçadas.')+'</p>';
+  LEVELS.forEach(function(L){
+    var lv = byLevel[L]; if(!lv) return;
+    var n = lv.filter(function(x){ return x.done; }).length;
+    h += '<h3 style="font-size:.95rem; margin:16px 0 4px;">'+LEVEL_NAMES[L]+' <span class="muted mono" style="font-size:.78rem; font-weight:500;">'+n+'/'+lv.length+'</span></h3>';
+    lv.forEach(function(x){
+      h += '<div class="goal'+(x.done?' done':'')+'"><div class="goal-head"><b>'+(x.done?'✓ ':'')+esc(x.cat.cando)+'</b><span class="muted mono" style="font-size:.78rem; white-space:nowrap;">'+x.firm+'/'+x.total+'</span></div>'+
+        '<div class="progress-bar-outer"><div class="progress-bar-inner" style="width:'+Math.round(x.pct*100)+'%;'+(x.done?' background:var(--good);':'')+'"></div></div></div>';
+    });
+  });
+  return h + '</div>';
+}
 function viewProgress(){
   var st = activeState(), deck = activeDeck();
   var counts = [0,0,0,0,0,0];
@@ -1108,6 +1401,7 @@ function viewProgress(){
   html += '<div class="card"><h2>Distribuição por caixa (Leitner)</h2>';
   html += '<div class="box-bar" style="margin-top:10px;">'+barSegs+'</div>';
   html += '<div class="box-legend">'+legend.join('')+'</div></div>';
+  html += goalsCard(st, deck);
   html += '<div class="card"><h2>Últimos 28 dias</h2><p class="muted" style="margin-bottom:10px;">Cor mais forte, mais chunks praticados naquele dia.</p><div class="heatmap">'+cells+'</div></div>';
   html += '<div class="card"><h2>Levar o progresso para outro aparelho</h2>'+
     '<p class="muted">O progresso fica salvo neste navegador. Para continuar no celular ou no computador, exporte aqui e importe lá. Vale também como cópia de segurança.</p>'+
@@ -1123,15 +1417,18 @@ function viewGuide(){
   html += '<h2>O método Chunk Sprint</h2>';
   html += '<p>A ideia central: em vez de decorar palavras soltas, você aprende <b>chunks</b>, blocos de frase prontos que um falante nativo usa do jeito que estão. É assim que o cérebro guarda língua de verdade: você não monta “I / would / like / to / introduce / myself” peça por peça; você já solta “I’d like to introduce myself” inteiro.</p>';
   html += '<h3>Repetição espaçada (sistema Leitner)</h3>';
-  html += '<p>Cada chunk vive numa “caixa” de 0 a 5. Quando você acerta, ele sobe de caixa e volta pra revisão mais tarde; quando erra, volta pra caixa 0. Isso concentra seu tempo exatamente no que você ainda não sabe de cor, sem desperdiçar revisão no que você já domina.</p>';
+  html += '<p>Cada chunk vive numa “caixa” de 0 a 5. Quando você acerta, ele sobe de caixa e volta para a revisão mais tarde. Quando erra, ele <b>desce duas caixas</b> (não volta para o zero) e reaparece amanhã: um tropeço num chunk quase dominado não apaga o que você já construiu. <b>Difícil</b> mantém a caixa, mas traz o chunk de volta na metade do tempo.</p>';
   html += '<ul><li>Caixa 0–1: revisa em 1–2 dias</li><li>Caixa 2–3: revisa em 4–7 dias</li><li>Caixa 4–5: revisa em 14–30 dias, praticamente dominado</li></ul>';
-  html += '<h3>A sessão do dia (30–60 min)</h3>';
+  html += '<h3>A sessão do dia (30 a 60 min, em 5 blocos)</h3>';
   html += '<ul>';
   html += '<li><b>Aquecimento</b>: revisão dos chunks que venceram hoje. Fale a resposta em voz alta <i>antes</i> de virar a carta. Chunks mais avançados aparecem às vezes <b>só de ouvido</b>: você escuta o áudio sem ver o texto e precisa reconhecer.</li>';
-  html += '<li><b>Chunks novos</b>: cada chunk novo é apresentado com áudio e frase de exemplo, e logo em seguida vem uma <b>checagem rápida</b> de múltipla escolha, pra você não passar batido só lendo.</li>';
-  html += '<li><b>Prática ativa</b>: exercícios variados <b>com correção automática</b>: digitar de memória, montar a frase com as palavras embaralhadas, completar a lacuna, múltipla escolha e ditado (ouvir e escrever). O tipo muda conforme a caixa do chunk: quanto mais avançado, mais difícil o exercício. Quem erra volta no fim do bloco e cai na revisão de amanhã.</li>';
-  html += '<li><b>Shadowing</b>: ouve e repete em voz alta, imitando ritmo e entonação. Depois grava com o <b>microfone</b> e o app compara o que entendeu com o chunk, marcando as palavras que não saíram claras.</li>';
+  html += '<li><b>Chunks novos</b>: cada chunk novo é apresentado com áudio e frase de exemplo. Logo depois, você tem que <b>produzir</b> o chunk sozinho, falando ou digitando a partir do português (com dica de iniciais, se precisar). Reconhecer numa lista é fácil; é o esforço de lembrar que fixa.</li>';
+  html += '<li><b>Prática ativa</b>: exercícios variados <b>com correção automática</b>: digitar de memória, montar a frase, completar a lacuna, múltipla escolha, ditado e <b>chunk na frase</b> (encaixar o chunk dentro de uma frase maior). O tipo muda conforme a caixa do chunk: quanto mais avançado, mais difícil o exercício. Quem erra volta no fim do bloco e cai na revisão de amanhã.</li>';
+  html += '<li><b>Shadowing</b>: ouve e repete em voz alta, imitando ritmo e entonação. Depois grava com o <b>microfone</b> e o app mostra o que entendeu, marcando as palavras que não saíram claras. A porcentagem mede clareza, não sotaque.</li>';
+  html += '<li><b>Conversa</b>: quando você aprende os chunks de uma categoria, libera um diálogo curto com eles. Primeiro você <b>ouve</b> a conversa inteira sem ler, tentando entender pelo contexto. Depois faz <b>o seu papel</b>: a outra pessoa fala, e você responde em voz alta. É onde o chunk decorado vira fala de verdade. As conversas liberadas também ficam na aba Baralho.</li>';
   html += '</ul>';
+  html += '<h3>Metas por nível</h3>';
+  html += '<p>Cada categoria tem um nível de referência (<b>A1</b> básico, <b>A2</b> básico avançado, <b>B1</b> intermediário, na escala europeia usada no mundo todo) e uma meta concreta, do tipo “pedir direção na rua” ou “negociar preço”. A meta se cumpre quando 80% dos chunks da categoria estão firmes. O painel fica na aba Progresso.</p>';
   html += '<h3>Áudio: como deixar a voz natural</h3>';
   html += '<p>O áudio usa as vozes instaladas no seu aparelho, e a diferença entre uma voz robótica e uma quase humana está em <b>qual</b> voz está selecionada. Toque na engrenagem ⚙️ no topo pra escolher a voz, ajustar a velocidade e testar. No iPhone e no Mac, as vozes <b>Siri</b> e as <b>Premium/Enhanced</b> (Ava, Zoe, Evan, Nathan) são as melhores; se não aparecerem, baixe em Ajustes → Acessibilidade → Conteúdo Falado. No Windows, o Edge traz vozes “Online (Natural)”. O botão 🐢 toca devagar pra você pegar cada som; o 💬 toca a frase de exemplo inteira.</p>';
   html += '<h3>Atalhos</h3>';
